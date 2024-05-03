@@ -1,0 +1,11 @@
+ollama_model:
+  'model': "llama3:latest"
+  'temperature': 0.75
+  'num_gpu': 1
+
+
+vector_database:
+  chroma:
+
+
+chat_session_path: './chat_session/'
