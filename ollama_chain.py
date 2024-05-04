@@ -1,5 +1,4 @@
 from langchain_community.llms import Ollama
-from langchain.embeddings import OllamaEmbeddings
 from langchain.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
 from langchain.memory import ConversationBufferWindowMemory
 from langchain.chains import LLMChain, create_history_aware_retriever, create_retrieval_chain
@@ -8,68 +7,15 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain.schema import Document
 
-from pinecone import Pinecone, ServerlessSpec, PodSpec
-from langchain_pinecone import PineconeVectorStore
-from langchain_chroma import Chroma
-from pdf_handler import extract_pdf, load_pdf, split_pdfs
-
 from utils import load_config
-from dotenv import load_dotenv
-import os
-
+from vectorstore import VectorDB
 
 def format_docs(docs: list[Document]):
     return '\n\n'.join(doc.page_content for doc in docs)
 
 
-def setup_pinecone(index_name, embedding_model, embedding_dim, metric='cosine', use_serverless=True):
-    load_dotenv()
-    pc = Pinecone(api_key=os.environ.get('PINECONE_API_KEY'))
-    if use_serverless:
-        spec = ServerlessSpec(cloud='aws', region='us-east-1')
-    else:
-        spec = PodSpec()
-
-    if index_name in pc.list_indexes().names():
-        pc.delete_index(index_name)
-
-    pc.create_index(
-        index_name,
-        dimension=embedding_dim,
-        metric=metric,
-        spec=spec
-    )
-
-    db = PineconeVectorStore.from_documents(index_name=index_name, embedding=embedding_model)
-    return db
-
-
-def setup_chroma(embedding_model, directory=None):
-    if not directory:
-        directory = './.cache/database/'
-    os.makedirs(directory, exist_ok=True)
-
-    db = Chroma(embedding_function=embedding_model, persist_directory=directory)
-    return db
-
-
-def load_vector_database(database: str, persist_directory=None):
-    # initialize embedding
-    embedding_model = OllamaEmbeddings(model='nomic-embed-text:latest')
-
-    if database == 'pinecone':
-        # initialize pinecone
-        index_name = 'rag-pdf'
-        db = setup_pinecone(index_name, embedding_model, 'cosine')
-
-    else:
-        db = setup_chroma(embedding_model, persist_directory)
-
-    return db
-
-
 class OllamaChain:
-    def __init__(self, config_path, chat_memory) -> None:
+    def __init__(self, chat_memory) -> None:
         prompt = PromptTemplate(
             template="""<|begin_of_text|>
             <|start_header_id|>system<|end_header_id|>
@@ -103,11 +49,11 @@ class OllamaChain:
 
 
 class OllamaRAGChain:
-    def __init__(self, config_path, chat_memory, uploaded_pdfs=None):
+    def __init__(self, chat_memory, uploaded_file=None):
         # initialize vector db
-        self.vector_db = load_vector_database('chroma')
-        if uploaded_pdfs:
-            self._update_knowledge_base(uploaded_pdfs)
+        self.vector_db = VectorDB('pinecone', 'any')
+        if uploaded_file:
+            self.update_knowledge_base()
 
         # initialize llm
         config = load_config()
@@ -117,9 +63,11 @@ class OllamaRAGChain:
         self.chat_memory = chat_memory
 
         # initialize sub chain with history message
-        contextual_q_system_prompt = """Given a chat history and the latest user question which might reference context in the\
-        chat history, formulate a standalone question which can be understood without the chat history. Do NOT answer \
-        the question, just reformulate it if needed and otherwise return it as is."""
+        contextual_q_system_prompt = """Given a chat history and the latest user question which might refer to context \
+        in the chat history. Check if the user's question refers to the chat history or not. If does, formulate a \
+        standalone question which is incorporated from the latest question and history and can be understood without \
+        the chat history.
+        Do NOT answer the question, just reformulate it if needed and otherwise return it as is."""
 
         self.contextual_q_prompt = ChatPromptTemplate.from_messages(
             [
@@ -135,10 +83,8 @@ class OllamaRAGChain:
 
         # initialize qa chain
         qa_system_prompt = """You are an assistant for question-answering tasks. Use the following pieces of retrieved\
-        context to answer the question. If you don't know the answer, just say that you don't know. \
-        Use three sentences maximum and keep the answer concise.\
-        
-        {context}"""
+        context to answer the question. If you don't know the answer, just say that you don't know.
+        Context: {context}"""
         qa_prompt = ChatPromptTemplate.from_messages(
             [
                 ('system', qa_system_prompt),
@@ -162,12 +108,12 @@ class OllamaRAGChain:
     def run(self, user_input):
         config = {"configurable": {"session_id": "any"}}
         response = self.conversation_rag_chain.invoke({'input': user_input}, config)
-        print(response['context'])
+        print(response)
 
         return response['answer']
 
     def update_chain(self, uploaded_pdf):
-        self._update_knowledge_base(uploaded_pdf)
+        self.update_knowledge_base(uploaded_pdf)
         self.history_aware_retriever = create_history_aware_retriever(
             self.llm, self.vector_db.as_retriever(), self.contextual_q_prompt
         )
@@ -179,13 +125,5 @@ class OllamaRAGChain:
             output_messages_key='answer'
         )
 
-    def _update_knowledge_base(self, uploaded_pdf):
-        files = extract_pdf(uploaded_pdf)
-        for f in files:
-            # add to database
-            doc = load_pdf(f)
-            chunks = split_pdfs(doc)
-            self.vector_db.add_documents(chunks)
-
-            # remove file
-            os.remove(f)
+    def update_knowledge_base(self, uploaded_pdf):
+        self.vector_db.index(uploaded_pdf)

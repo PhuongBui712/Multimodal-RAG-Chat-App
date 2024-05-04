@@ -1,12 +1,7 @@
 import os
-from pinecone import Pinecone, ServerlessSpec, PodSpec
-from dotenv import load_dotenv
 
 from langchain_community.document_loaders import PyPDFLoader, PyPDFDirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import OllamaEmbeddings
-from langchain_pinecone import PineconeVectorStore
-from langchain_chroma import Chroma
 from langchain.schema.document import Document
 
 
@@ -31,7 +26,7 @@ def load_pdf_directory(directory):
     return loader.load()
 
 
-def split_pdfs(pdfs: list[Document]):
+def split_pdf(pdfs: list[Document]):
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=512,
         chunk_overlap=64,
@@ -47,13 +42,10 @@ def extract_pdf(uploaded_pdf):
     cache_dir = os.path.join(cache_dir, 'temp_files')
     os.makedirs(cache_dir, exist_ok=True)
 
-    files = []
     for file in uploaded_pdf:
         file_path = os.path.join(cache_dir, file.name)
 
         with open(file_path, 'wb') as w:
             w.write(file.getvalue())
 
-        files.append(file_path)
-
-    return files
+    return cache_dir
