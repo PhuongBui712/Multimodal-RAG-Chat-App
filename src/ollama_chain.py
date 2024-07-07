@@ -7,8 +7,9 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain.schema import Document
 
-from utils import load_config
-from vectorstore import VectorDB
+from src.utils import load_config
+from src.vectorstore import VectorDB
+
 
 def format_docs(docs: list[Document]):
     return '\n\n'.join(doc.page_content for doc in docs)
@@ -36,7 +37,7 @@ class OllamaChain:
         )
 
         config = load_config()
-        llm = Ollama(**config['ollama_model'])
+        llm = Ollama(**config['chat_model'])
         # llm = Ollama(model='llama3:latest', temperature=0.75, num_gpu=1)
 
         self.llm_chain = LLMChain(prompt=prompt, llm=llm, memory=self.memory, output_parser=StrOutputParser())
@@ -57,7 +58,7 @@ class OllamaRAGChain:
 
         # initialize llm
         config = load_config()
-        self.llm = Ollama(**config['ollama_model'])
+        self.llm = Ollama(**config['chat_model'])
 
         # initialize memory
         self.chat_memory = chat_memory
@@ -108,7 +109,6 @@ class OllamaRAGChain:
     def run(self, user_input):
         config = {"configurable": {"session_id": "any"}}
         response = self.conversation_rag_chain.invoke({'input': user_input}, config)
-        print(response)
 
         return response['answer']
 

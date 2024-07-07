@@ -1,9 +1,9 @@
 import streamlit as st
 
-from ollama_chain import OllamaChain, OllamaRAGChain
-from llama_cpp_chains import LlamaChain
-from pdf_handler import extract_pdf
-from langchain.memory import StreamlitChatMessageHistory
+from src.ollama_chain import OllamaChain, OllamaRAGChain
+from src.llama_cpp_chains import LlamaChain
+from src.pdf_handler import extract_pdf
+from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 
 
 @st.cache_resource

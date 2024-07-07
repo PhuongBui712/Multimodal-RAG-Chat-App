@@ -1,10 +1,10 @@
 from pinecone import Pinecone, ServerlessSpec, PodSpec
 from langchain_pinecone import PineconeVectorStore
 from langchain_chroma import Chroma
-from langchain.embeddings import OllamaEmbeddings
+from langchain_community.embeddings import OllamaEmbeddings
 from langchain.indexes import SQLRecordManager, index
 
-from pdf_handler import extract_pdf, load_pdf_directory, split_pdf
+from src.pdf_handler import extract_pdf, load_pdf_directory, split_pdf
 
 import os
 import shutil

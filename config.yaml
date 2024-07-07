@@ -1,4 +1,4 @@
-ollama_model:
+chat_model:
   'model': "llama3:latest"
   'temperature': 0.75
   'num_gpu': 1
